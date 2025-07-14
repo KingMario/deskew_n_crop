@@ -4,7 +4,7 @@ import sys
 
 # Get image filename from CLI argument
 if len(sys.argv) < 2:
-    print("Usage: python rotate-back.py <image_filename>")
+    print("Usage: python deskew-image.py <image_filename>")
     sys.exit(1)
 image_filename = sys.argv[1]
 
