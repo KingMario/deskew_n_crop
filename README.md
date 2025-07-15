@@ -1,18 +1,22 @@
-# Image Deskew & Crop Tool
+# Deskew & Crop Tools for Images and PDFs
 
 ## Overview
 
-This tool automatically detects and corrects the tilt (skew) of scanned images, then crops out all unnecessary margins, leaving only the main content (such as text).
+This project provides command-line tools to automatically deskew (correct tilt) and crop scanned images and PDF documents. It detects the main content, corrects skew, and removes unnecessary margins, leaving only the essential text or graphics.
+
+> When scanning, the edges of the paper must be clear enough so that straight lines can be detected for tilt angle calculation.
 
 ## Features
 
-- Detects the main straight lines in the image to estimate the tilt angle
-- Rotates the image to correct the tilt
-- Uses advanced text region detection (MSER) to crop out all blank margins
-- Outputs two files: a corrected image and a tightly cropped image
-- Command-line interface: specify the image file to process
+- Deskew and crop individual image files
+- Deskew and crop all pages of a PDF document
+- Advanced text region detection (MSER) for precise cropping
+- Outputs corrected and tightly cropped files
+- Simple command-line usage
 
 ## Usage
+
+### Image Deskew & Crop
 
 1. Install dependencies:
 
@@ -20,13 +24,25 @@ This tool automatically detects and corrects the tilt (skew) of scanned images, 
    pip install -r requirements.txt
    ```
 
-2. Run the tool:
+2. Run the image tool:
 
    ```bash
-   python deskew-image.py <your_image_file.jpg>
+   python deskew_image.py <your_image_file.jpg>
    ```
 
-   - The tool will output `<your_image_file>_deskewed.jpg` (deskewed) and `<your_image_file>_cropped.jpg` (cropped to text only).
+   - Outputs: `<your_image_file>_corrected.jpg` and `<your_image_file>_cropped.jpg`
+
+### PDF Deskew & Crop
+
+1. Install dependencies (see above).
+
+2. Run the PDF tool:
+
+   ```bash
+   python deskew_pdf.py <your_pdf_file.pdf>
+   ```
+
+   - Outputs: `<your_pdf_file>_processed.pdf` (all pages deskewed and cropped)
 
 ## License
 
