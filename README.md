@@ -1,48 +1,36 @@
-# Deskew & Crop Tools for Images and PDFs
+# scan-deskew-crop
 
-## Overview
-
-This project provides command-line tools to automatically deskew (correct tilt) and crop scanned images and PDF documents. It detects the main content, corrects skew, and removes unnecessary margins, leaving only the essential text or graphics.
-
-> When scanning, the edges of the paper must be clear enough so that straight lines can be detected for tilt angle calculation.
-
-## Features
-
-- Deskew and crop individual image files
-- Deskew and crop all pages of a PDF document
-- Advanced text region detection (MSER) for precise cropping
-- Outputs corrected and tightly cropped files
-- Simple command-line usage
+Local tools for conservative deskewing and cropping of scanned images and PDFs.
 
 ## Usage
 
-### Image Deskew & Crop
+Python 3.11 and the packages in `requirements.txt` are required. PDF processing uses PyMuPDF and does not require Poppler.
 
-1. Install dependencies:
+```bash
+python3.11 -m pip install -r requirements.txt
+python3.11 deskew_image.py /path/to/scan.jpg --output-dir /tmp/scan-deskew-results
+python3.11 deskew_pdf.py /path/to/scan.pdf --output-dir /tmp/scan-deskew-results --dpi 300
+```
 
-   ```bash
-   pip install -r requirements.txt
-   ```
+Source files remain intact. Existing output files require `--force` to replace. PDF results are image-only documents with page dimensions determined by cropped pixel size and DPI.
 
-2. Run the image tool:
+Images produce `_corrected` and `_cropped` files; PDFs produce `_processed.pdf`. Errors exit nonzero. Image outputs are published individually, so a failed invocation may leave one completed image.
 
-   ```bash
-   python deskew_image.py <your_image_file.jpg>
-   ```
+## Behavior and limits
 
-   - Outputs: `<your_image_file>_corrected.jpg` and `<your_image_file>_cropped.jpg`
+- Rotation uses horizontal/vertical line consensus within 15 degrees and expands the canvas with white borders. Insufficient evidence leaves orientation unchanged.
+- Cropping includes every nonwhite pixel and adds a 12-pixel margin. Noise and shadows may retain extra borders.
+- Image input applies EXIF orientation and composites transparency onto white. Multi-frame and high-bit-depth images are rejected explicitly. Output is 8-bit RGB and does not preserve image metadata; JPEG encoding is lossy.
+- PDF pages are processed individually through a temporary disk PDF. Raster memory depends on the current page; output size and document metadata grow with page count.
+- Rendered and rotated images are limited to 40 million pixels. PDF DPI must be between 36 and 600.
+- PDF output does not retain searchable text, links, or editable annotations. Keep original documents and inspect results.
+- Perspective distortion and 90-degree orientation detection are outside the tool's scope.
 
-### PDF Deskew & Crop
+## Tests
 
-1. Install dependencies (see above).
-
-2. Run the PDF tool:
-
-   ```bash
-   python deskew_pdf.py <your_pdf_file.pdf>
-   ```
-
-   - Outputs: `<your_pdf_file>_processed.pdf` (all pages deskewed and cropped)
+```bash
+python3.11 -B -m unittest discover -s tests -v
+```
 
 ## License
 

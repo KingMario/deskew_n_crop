@@ -1,5 +1,4 @@
-opencv-python
 numpy
-
-pdf2image
-Pillow
+opencv-python
+PyMuPDF>=1.24
+Pillow>=10
