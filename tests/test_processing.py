@@ -54,6 +54,59 @@ class ProcessingTests(unittest.TestCase):
         _, residual = images.deskew_image(corrected)
         self.assertAlmostEqual(residual, 0, delta=1)
 
+    def text_page(self, tilt, columns=1):
+        img = self.blank()
+        for x in ([65] if columns == 1 else [40, 420]):
+            for y in range(150, 851, 70):
+                cv2.putText(img, "Reading text line" if columns == 2 else "Reading a regular printed text line",
+                            (x, y), cv2.FONT_HERSHEY_SIMPLEX, 0.65, (0, 0, 0), 1, cv2.LINE_AA)
+        matrix = cv2.getRotationMatrix2D((400, 500), tilt, 1)
+        return cv2.warpAffine(img, matrix, (800, 1000), borderValue=(255, 255, 255))
+
+    def test_text_projection_without_detected_lines(self):
+        for tilt in (-9, -3, 0, 4, 11):
+            with self.subTest(tilt=tilt), patch.object(images.cv2, "HoughLines", return_value=None):
+                result, angle = images.deskew_image(self.text_page(tilt))
+                self.assertAlmostEqual(angle, -tilt, delta=0.5)
+                _, residual = images.deskew_image(result)
+                self.assertAlmostEqual(residual, 0, delta=0.5)
+
+    def test_text_projection_two_columns(self):
+        with patch.object(images.cv2, "HoughLines", return_value=None):
+            _, angle = images.deskew_image(self.text_page(6, columns=2))
+        self.assertAlmostEqual(angle, -6, delta=0.5)
+
+    def test_text_page_full_detection_pipeline(self):
+        for tilt in (-9, -3, 0, 4, 11):
+            with self.subTest(tilt=tilt):
+                _, angle = images.deskew_image(self.text_page(tilt))
+                self.assertAlmostEqual(angle, -tilt, delta=0.5)
+
+    def test_projection_rejects_conflicting_rows_and_noise(self):
+        mixed = self.text_page(-7)
+        mixed[500:] = self.text_page(7)[500:]
+        self.assertEqual(images.text_projection_angle(cv2.cvtColor(mixed, cv2.COLOR_BGR2GRAY)), 0)
+        noise = np.full((1000, 800), 255, np.uint8)
+        rng = np.random.default_rng(100)
+        for x, y in rng.integers([20, 20], [780, 980], size=(300, 2)):
+            cv2.circle(noise, (int(x), int(y)), 2, 0, -1)
+        self.assertEqual(images.text_projection_angle(noise), 0)
+
+    def test_projection_rejects_sparse_and_blank_content(self):
+        sparse = self.blank()
+        cv2.putText(sparse, "Small title", (100, 300), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 0), 2)
+        for img in (self.blank(), sparse):
+            with patch.object(images.cv2, "HoughLines", return_value=None):
+                result, angle = images.deskew_image(img)
+            self.assertEqual(angle, 0)
+            np.testing.assert_array_equal(result, img)
+
+    def test_projection_used_for_inconsistent_lines(self):
+        lines = np.array([[[0, np.deg2rad(70)]], [[10, np.deg2rad(110)]]], np.float32)
+        with patch.object(images.cv2, "HoughLines", return_value=lines):
+            _, angle = images.deskew_image(self.text_page(5))
+        self.assertAlmostEqual(angle, -5, delta=0.5)
+
     def test_crop_retains_illustration_and_text(self):
         img = self.blank()
         cv2.rectangle(img, (100, 100), (500, 300), (0, 0, 0), -1)

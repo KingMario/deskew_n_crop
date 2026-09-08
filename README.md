@@ -19,6 +19,7 @@ Images produce `_corrected` and `_cropped` files; PDFs produce `_processed.pdf`.
 ## Behavior and limits
 
 - Rotation uses horizontal/vertical line consensus within 15 degrees and expands the canvas with white borders. Insufficient evidence leaves orientation unchanged.
+- When line evidence is insufficient, text-like components are scored by horizontal row projection over ±15 degrees. A clear peak and at least three text bands are required. Sparse text, ambiguous layouts, and estimates near the search boundary retain their orientation. This fallback does not detect 90/180-degree orientation or vertical writing; mixed layouts may prevent correction.
 - Cropping includes every nonwhite pixel and adds a 12-pixel margin. Noise and shadows may retain extra borders.
 - Image input applies EXIF orientation and composites transparency onto white. Multi-frame and high-bit-depth images are rejected explicitly. Output is 8-bit RGB and does not preserve image metadata; JPEG encoding is lossy.
 - PDF pages are processed individually through a temporary disk PDF. Raster memory depends on the current page; output size and document metadata grow with page count.

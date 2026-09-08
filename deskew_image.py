@@ -23,6 +23,59 @@ def validate_image(img):
         raise ValueError("Image exceeds the 40 million pixel limit")
 
 
+def text_projection_angle(gray):
+    """Estimate small text-line skew; return zero when row evidence is weak."""
+    scale = min(1.0, 1000 / max(gray.shape))
+    if scale < 1:
+        gray = cv2.resize(gray, None, fx=scale, fy=scale, interpolation=cv2.INTER_AREA)
+    _, binary = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
+    h, w = binary.shape
+    _, labels, stats, _ = cv2.connectedComponentsWithStats(binary)
+    valid = [i for i, (x, y, width, height, area) in enumerate(stats[1:], 1)
+             if 3 <= height <= h * 0.1 and 1 <= width <= w * 0.12
+             and 4 <= area <= h * w * 0.005 and width <= height * 6]
+    if len(valid) < 20:
+        return 0.0
+    lookup = np.zeros(len(stats), np.uint8)
+    lookup[valid] = 1
+    mask = lookup[labels]
+    if mask.mean() > 0.35:
+        return 0.0
+    # Padding prevents angle-dependent clipping from influencing the score.
+    pad = math.ceil(max(h, w) * 0.3)
+    mask = cv2.copyMakeBorder(mask, pad, pad, pad, pad, cv2.BORDER_CONSTANT, value=0)
+    mh, mw = mask.shape
+
+    def projection(angle):
+        matrix = cv2.getRotationMatrix2D((mw / 2, mh / 2), float(angle), 1)
+        rotated = cv2.warpAffine(mask, matrix, (mw, mh), flags=cv2.INTER_NEAREST)
+        return rotated.sum(axis=1, dtype=np.float64)
+
+    def score(angle):
+        rows = projection(angle)
+        return float(np.dot(rows, rows))
+
+    coarse = np.arange(-15.0, 15.01, 1.0)
+    scores = np.array([score(a) for a in coarse])
+    best = float(coarse[int(np.argmax(scores))])
+    fine = np.arange(max(-15, best - 1), min(15, best + 1) + 0.01, 0.25)
+    fine_scores = np.array([score(a) for a in fine])
+    angle = float(fine[int(np.argmax(fine_scores))])
+    peak = float(np.max(fine_scores))
+    distant = scores[np.abs(coarse - angle) >= 2]
+    if abs(angle) >= 14.75 or abs(angle) < 0.25 or peak < score(0) * 1.08:
+        return 0.0
+    if distant.size and peak < float(distant.max()) * 1.1:
+        return 0.0
+    rows = projection(angle)
+    active = (rows > rows.max() * 0.2).astype(np.int8)
+    starts = np.flatnonzero(np.diff(np.pad(active, (1, 1))) == 1)
+    ends = np.flatnonzero(np.diff(np.pad(active, (1, 1))) == -1)
+    if np.count_nonzero(ends - starts >= 3) < 3:
+        return 0.0
+    return angle
+
+
 def deskew_image(img):
     validate_image(img)
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
@@ -31,14 +84,17 @@ def deskew_image(img):
         gray = cv2.resize(gray, None, fx=scale, fy=scale)
     edges = cv2.Canny(gray, 50, 150)
     lines = cv2.HoughLines(edges, 1, np.pi / 180, max(60, int(min(gray.shape) * 0.2)))
-    if lines is None:
-        return img, 0.0
-    angles = (np.degrees(lines[:, 0, 1]) - 90 + 45) % 90 - 45
-    candidates = angles[np.abs(angles) <= 15]
-    if len(candidates) < 2 or len(candidates) < len(angles) * 0.75:
-        return img, 0.0
-    angle = float(np.median(candidates))
-    if np.mean(np.abs(candidates - angle) <= 2) < 0.75 or abs(angle) < 0.25:
+    angle = None
+    if lines is not None:
+        angles = (np.degrees(lines[:, 0, 1]) - 90 + 45) % 90 - 45
+        candidates = angles[np.abs(angles) <= 15]
+        if len(candidates) >= 2 and len(candidates) >= len(angles) * 0.75:
+            candidate = float(np.median(candidates))
+            if np.mean(np.abs(candidates - candidate) <= 2) >= 0.75:
+                angle = candidate
+    if angle is None:
+        angle = text_projection_angle(gray)
+    if abs(angle) < 0.25:
         return img, 0.0
     h, w = img.shape[:2]
     matrix = cv2.getRotationMatrix2D((w / 2, h / 2), angle, 1)
